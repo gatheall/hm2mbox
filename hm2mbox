@@ -1,4 +1,17 @@
 #!/usr/bin/perl -wT
+#
+# ----------------------------------------------------------------------
+# hm2mbox
+#
+# Written by George A. Theall, theall@tifaware.com
+#
+# Copyright (c) 2004, George A. Theall. All rights reserved.
+#
+# This module is free software; you can redistribute it and/or modify
+# it under the same terms as Perl itself.
+#
+# $Id$
+# ----------------------------------------------------------------------
 
 
 =head1 NAME
@@ -91,26 +104,6 @@ will be reported to STDERR and cause the file to be skipped.
 L<http://www.tifaware.com/perl/hm2mbox/> and
 L<http://www.hypermail.org/>.
 
-
-=head1 AUTHOR
-
-George A. Theall, E<lt>theall@tifaware.comE<gt>
-
-
-=head1 COPYRIGHT AND LICENSE
-
-Copyright (c) 2004, George A. Theall.
-All rights reserved.
-
-This script is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself. 
-
-
-=head1 HISTORY
-
-06-Jul-2004, 1.00, George A. Theall
-    o Initial version.
-
 =cut
 
 
@@ -132,7 +125,7 @@ use Text::Balanced qw(extract_tagged);
 # Initialize variables.
 $| = 1;
 my $DEBUG = 0;                          # debugging messages?
-my $VERSION = '1.00';
+my $VERSION = '1.0.0';
 
 
 ############################################################################
