@@ -1,0 +1,329 @@
+#!/usr/bin/perl -wT
+
+
+=head1 NAME
+
+hm2mbox - Convert hypermail archives to a Unix mbox file.
+
+
+=head1 SYNOPSIS
+
+  # converts messages in hypermail archive 'listdir' to a Unix mbox file.
+  hm2mbox listdir > mbox
+
+  # same as above but with copious debugging messages.
+  hm2mbox -d listdir > mbox
+
+
+=head1 DESCRIPTION
+
+This script extracts messages from a Hypermail mailing list archive in
+XHTML format and outputs them as a Unix mbox file.  This might be useful
+if, say, you're converting from Hypermail (L<http://www.hypermail.org/>)
+2.1.8+ to MHonArc (L<http://www.mhonarc.org/>).
+
+To use B<hm2mbox>, pass it the name of the directory holding the
+Hypermail archives.  The script will recurse the directory, extract the
+contents of each message, and write the results to standard output.  If
+a message has associated attachments, it will include those as well.  If
+you'd like to see copious debugging messages while the script runs,
+specify the C<-d> option. 
+
+B<hm2mbox> is written in Perl.  It should work on any system with Perl
+5.005 or better.  It also requires the following Perl modules:
+
+    o Carp
+    o File::Basename
+    o File::Find
+    o Getopt::Long
+    o HTML::Entities
+    o MIME::Lite
+    o Text::Balanced
+
+If your system does not have these modules installed already, visit CPAN
+(L<http://search.cpan.org/>).  Note that C<HTML::Entities> and
+C<MIME::Lite> are not included with the default Perl distribution so you
+may need to install them yourself.  Also note that C<Text::Balanced>
+does not work with versions of Perl older than 5.005; further, it is not
+included with Perl distributions prior to 5.8.0 so you will probably
+need to install it if you're running an older version of Perl. 
+
+
+=head1 KNOWN BUGS AND CAVEATS
+
+Currently, I am not aware of any bugs in this script.  At the same time,
+though, I am not certain how robust it is since I have not tested it on
+a variety of Hypermail archives. 
+
+This script requires that messages be formatted as XHTML.  If you're
+trying to convert an archive from a version of Hypermail before 2.1.8,
+when XHTML support was introduced, look at Anthony W's h2mbx.pl script,
+L<http://www.albany.net/~anthonyw/mhonarc/h2mbx.pl-script.txt>. 
+
+Understand that it is not possible to regenerate messages perfectly from
+the hypermail archives and that, as a result, things like GnuPG
+signatures are unlikely to be valid. 
+
+If you encounter an error similar to C<Insecure dependency in chdir
+while running with -T switch at /usr/lib/perl/5.00503/File/Find.pm line
+133> when trying to run B<hm2mbox>, it's likely that you're using an
+older version of the Perl module C<File::Find>.  Versions distributed
+with Perl versions prior to 5.6.0 don't support the C<no_chdir> option,
+which is used in this script to avoid problems with taint checks.  The
+solution is to either upgrade C<File::Find>, upgrade Perl itself, or
+disable taint checks (ie, remove the C<-T> option on the first line of
+the script). 
+
+If you encounter a problem using this script, I encourage you to enable
+debug mode (eg, add C<-d> to your commandline) and examine the output it
+produces before contacting me.  Often, this will enable you to resolve
+the problem yourself. 
+
+
+=head1 DIAGNOSTICS
+
+Fatal errors will be reported using croak. Problems processing a message
+will be reported to STDERR and cause the file to be skipped.
+
+
+=head1 SEE ALSO
+
+L<http://www.tifaware.com/perl/hm2mbox/> and
+L<http://www.hypermail.org/>.
+
+
+=head1 AUTHOR
+
+George A. Theall, E<lt>theall@tifaware.comE<gt>
+
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (c) 2004, George A. Theall.
+All rights reserved.
+
+This script is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
+
+
+=head1 HISTORY
+
+06-Jul-2004, 1.00, George A. Theall
+    o Initial version.
+
+=cut
+
+
+############################################################################
+# Make sure we have access to the required modules.
+use 5.005;
+use bytes;
+use strict;
+use Carp;
+use File::Basename;
+use File::Find;
+use Getopt::Long;
+use HTML::Entities;
+use MIME::Lite;
+use Text::Balanced qw(extract_tagged);
+
+
+############################################################################
+# Initialize variables.
+$| = 1;
+my $DEBUG = 0;                          # debugging messages?
+my $VERSION = '1.00';
+
+
+############################################################################
+# Process commandline arguments.
+my %options = (
+    'debug'  => \$DEBUG,
+);
+Getopt::Long::Configure('bundling');
+GetOptions(
+    \%options,
+    'debug|d!',
+    'help|h|?!',
+) or $options{help} = 1;
+$0 =~ s/^.+\///;
+if ($options{help} or scalar(@ARGV) != 1) {
+    warn "\n",
+        "Usage: $0 [options] listdir\n",
+        "\n",
+       "Options:\n",
+        "  -?, -h, --help             Display this help and exit.\n",
+        "  -d, --debug                Display copious debugging messages while\n",
+        "                               converting messages.\n";
+    exit(9);
+}
+
+
+############################################################################
+# Identify message files in the hypermail archives.
+my @files;
+my $listdir = shift @ARGV;
+warn "debug: identifying message files under '$listdir'.\n" if $DEBUG;
+find(
+    {
+        wanted => sub {
+            # nb: ignore attachment directories and get only message files.
+            if ($File::Find::dir !~ /att-\d+$/ and /\d+\.html$/) {
+                warn "debug:   $_\n" if $DEBUG;
+                push(@files, $_);
+            }
+        },
+        no_chdir => 1,
+        untaint => 1,
+    },
+    $listdir
+);
+
+
+############################################################################
+# Process message files.
+warn "debug: processing Hypermail message files.\n" if $DEBUG;
+foreach my $file (@files) {
+
+    # Slurp entire message into a string.
+    #
+    # nb: extract_tagged modifies $message!
+    warn "debug:   reading '$file'.\n" if $DEBUG;
+    my $message;
+    open(FILE, $file) or croak "Can't read $file - $!\n";
+    while (<FILE>) {
+        $message .= $_;
+    }
+    close(FILE);
+    if ($message =~ /<a name="start" .+?<p>This message has been deleted from the archive<\/p>/) {
+        warn "skipped '$file' - deleted from archives.\n";
+        next;
+    }
+    if ($message !~ /DTD XHTML 1\.0/) {
+        warn "skipped '$file' - not formatted as XHTML.\n";
+        next;
+    }
+
+    # Identify mailing list address (for To: header).
+    my $list = HTML::Entities::decode($1) 
+        if ($message =~ /a href="mailto:(.+?&#64;.+?)\?Subject/is);
+
+    # Extract message headers of interest.
+    warn "debug:     extracting message headers.\n" if $DEBUG;
+    my $headers = extract_tagged(
+        $message, 
+        '<div class="head">', 
+        undef, 
+        '(?s).*?<body>\s*'
+    );
+    unless ($headers) {
+        if ($@) {
+            warn "*** extract_tagged returned '$@' when parsing headers in '$file'! ****\n";
+        }
+        else {
+            warn "*** Can't isolate headers if '$file'! ****\n";
+        }
+        next;
+    }
+    my %headers;
+    foreach my $field ('received', 'sent', 'name', 'email', 'subject', 'id', 'inreplyto') {
+        $headers{$field} = HTML::Entities::decode($1) 
+            if ($headers =~ /<!-- $field="(.+?)" -->/);
+    }
+    # nb: Some headers must exist.
+    my $problems;
+    foreach my $field ('received', 'sent', 'email', 'id') {
+        unless (exists $headers{$field}) {
+            warn "**** No '$field' header field found in '$file'! ***\n";
+            $problems++;
+        }
+    }
+    next if ($problems);
+    if ($DEBUG) {
+        foreach my $field (sort keys %headers) {
+            warn "debug:       $field:  $headers{$field}\n";
+        }
+    }
+
+    # Extract message text.
+    warn "debug:     extracting message body.\n" if $DEBUG;
+    my $text = extract_tagged(
+        $message, 
+        '<div class="mail">', 
+        undef, 
+        '(?s).*?<!-- body="start" -->\s*'
+    );
+    unless ($text) {
+        if ($@) {
+            warn "*** extract_tagged returned '$@' when parsing message text in '$file'! ****\n";
+        }
+        else {
+            warn "*** Can't isolate message text if '$file'! ****\n";
+        }
+        next;
+    }
+    extract_tagged(
+        $text, 
+        '<address class="headers">', 
+        undef, 
+        '(?s)<div class="mail">\s*'
+    );
+    # Extract any attachment info.
+    #
+    # nb: this must come before removing HTML.
+    warn "debug:     extracting any attachment info.\n" if $DEBUG;
+    my(@attachments, @mimetypes);
+    if ($text =~ s/((<p>)+\n)*(<p>)+<div>(.+?)<\/div>//s) {
+        my $bullets = $4;
+        while ($bullets =~ /<li>(.+?) attachment: <a href="(.+?)">/sg) {
+            push(@mimetypes, $1);
+            push(@attachments, $2);
+        }
+    }
+    # Strip HTML from message text.
+    $text =~ s/\s*<span id="received">.+<\/div>\s*$//s;
+    $text =~ s/\<a\ href\=\"(.*?)"\>(.*?)\<\/a\>/$2/gs;
+    $text =~ s/^\s*(<p>\n)+//s;
+    $text =~ s/<(a name="\d+qlink\d+"|\/a|em class="quotelev\d+"|\/em)>+\s*//gs;
+    $text =~ s/<(br|br \/|pre|\/pre)>+\n*//gs;
+    $text =~ s/<p>/\n/gs;
+    $text =~ s/(\&nbsp\;){8}/\t/g;      # decode tabs;
+    $text =~ s/\&nbsp\;/ /g;            # decode &nbsp;
+    $text = HTML::Entities::decode($text);
+
+    # Regenerate the message.
+    warn "debug:     regenerating message.\n" if $DEBUG;
+    my $msg = MIME::Lite->new(
+        Date          => $headers{sent},
+        From          => (
+            exists $headers{name} ? 
+                "\"" . $headers{name} . "\" <" . $headers{email} . ">" :
+                $headers{email}
+        ),
+        To            => $list,
+        Subject       => ($headers{subject} || '(no subject)'),
+        'Message-ID'  => '<' . $headers{id} . '>',
+        Data          => $text,
+        Encoding      => 'quoted-printable',
+    );
+    $msg->add('In-Reply-To', '<' . $headers{inreplyto} . '>') 
+        if (exists $headers{inreplyto});
+    # Add a header to specify how this was regenerated.
+    $file =~ /((\d+\/)?[^\/]+)\.html$/; # nb: get an id for X-Note header line.
+    $msg->add('X-Note', "Regenerated using $0 $VERSION from hypermail archives ($1)");
+    # Add any attachments.
+    foreach my $att (@attachments) {
+        my $mimetype = shift(@mimetypes);
+        $att =~ s/^\.\.\//$listdir\//;
+        warn "debug:     attaching '$att' ($mimetype).\n" if $DEBUG;
+        $msg->attach(
+            Type      => $mimetype,
+            Path      => $att,
+            Filename  => basename($att),
+        );
+    }
+
+    print "From " . $headers{email} . "  " . $headers{received} . "\n",
+        $msg->as_string,
+        "\n";
+}
