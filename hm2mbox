@@ -5,12 +5,10 @@
 #
 # Written by George A. Theall, theall@tifaware.com
 #
-# Copyright (c) 2004, George A. Theall. All rights reserved.
+# Copyright (c) 2004-2016, George A. Theall. All rights reserved.
 #
 # This module is free software; you can redistribute it and/or modify
 # it under the same terms as Perl itself.
-#
-# $Id$
 # ----------------------------------------------------------------------
 
 
@@ -32,8 +30,9 @@ hm2mbox - Convert hypermail archives to a Unix mbox file.
 
 This script extracts messages from a Hypermail mailing list archive in
 XHTML format and outputs them as a Unix mbox file.  This might be useful
-if, say, you're converting from Hypermail (L<http://www.hypermail.org/>)
-2.1.8+ to MHonArc (L<http://www.mhonarc.org/>).
+if, say, you're converting from Hypermail 
+(L<http://www.hypermail-project.org/>) 2.1.8+ to MHonArc 
+(L<http://www.mhonarc.org/>).
 
 To use B<hm2mbox>, pass it the name of the directory holding the
 Hypermail archives.  The script will recurse the directory, extract the
@@ -71,7 +70,7 @@ a variety of Hypermail archives.
 This script requires that messages be formatted as XHTML.  If you're
 trying to convert an archive from a version of Hypermail before 2.1.8,
 when XHTML support was introduced, look at Anthony W's h2mbx.pl script,
-L<http://www.albany.net/~anthonyw/mhonarc/h2mbx.pl-script.txt>. 
+L<http://www.aspidastra.com/anthonyw/mhonarc/h2mbx.pl-script.txt>. 
 
 Understand that it is not possible to regenerate messages perfectly from
 the hypermail archives and that, as a result, things like GnuPG
@@ -101,8 +100,8 @@ will be reported to STDERR and cause the file to be skipped.
 
 =head1 SEE ALSO
 
-L<http://www.tifaware.com/perl/hm2mbox/> and
-L<http://www.hypermail.org/>.
+L<https://github.com/gatheall/hm2mbox> and
+L<http://www.hypermail-project.org/>.
 
 =cut
 
@@ -125,7 +124,6 @@ use Text::Balanced qw(extract_tagged);
 # Initialize variables.
 $| = 1;
 my $DEBUG = 0;                          # debugging messages?
-my $VERSION = '1.0.0';
 
 
 ############################################################################
@@ -303,7 +301,7 @@ foreach my $file (@files) {
         if (exists $headers{inreplyto});
     # Add a header to specify how this was regenerated.
     $file =~ /((\d+\/)?[^\/]+)\.html$/; # nb: get an id for X-Note header line.
-    $msg->add('X-Note', "Regenerated using $0 $VERSION from hypermail archives ($1)");
+    $msg->add('X-Note', "Regenerated using $0 from hypermail archives ($1)");
     # Add any attachments.
     foreach my $att (@attachments) {
         my $mimetype = shift(@mimetypes);
