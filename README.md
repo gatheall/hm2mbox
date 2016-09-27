@@ -1,6 +1,6 @@
 ## Introduction
 
-This script extracts messages from a Hypermail mailing list archive in XHTML format and outputs them as a Unix mbox file.  This might be useful if, say, you're converting from [Hypermail](http://www.hypermail.org/) 2.1.8+ to [MHonArc](http://www.mhonarc.org/).
+This script extracts messages from a Hypermail mailing list archive in XHTML format and outputs them as a Unix mbox file.  This might be useful if, say, you're converting from [Hypermail](http://www.hypermail-project.org/) 2.1.8+ to [MHonArc](http://www.mhonarc.org/).
 
 *hm2mbox* is written in Perl.  It should work on any system with Perl 5.005 or better.  It also requires the following Perl modules:
 
